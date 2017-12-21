@@ -38,7 +38,7 @@ ifeq ($(OSTYPE),Linux)
 OS = -D_LINUX_
 CC = gcc
 #DEBUG = -g
-CFLAGS = -Wall $(OS) $(DEBUG) -O3
+CFLAGS = -static -Wall $(OS) $(DEBUG) -O3
 LIBS = -pthread
 endif
 
