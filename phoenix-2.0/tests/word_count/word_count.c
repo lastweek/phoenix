@@ -323,6 +323,7 @@ int main(int argc, char *argv[])
 
 #ifdef TIMING
     library_time += time_diff (&end, &begin);
+    fprintf (stderr, "map_reduce: %u\n", time_diff (&end, &begin));
 #endif
 
     get_time (&begin);

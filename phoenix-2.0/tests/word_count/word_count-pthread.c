@@ -117,111 +117,110 @@ int wordcount_cmp(const void *v1, const void *v2)
  */
 void wordcount_splitter(void *data_in)
 {
-   pthread_attr_t attr;
-   pthread_t * tid;
-   int i,num_procs;
+	pthread_attr_t attr;
+	pthread_t * tid;
+	int i,num_procs;
 
-   CHECK_ERROR((num_procs = sysconf(_SC_NPROCESSORS_ONLN)) <= 0);
-   dprintf("THe number of processors is %d\n\n", num_procs);
+	CHECK_ERROR((num_procs = sysconf(_SC_NPROCESSORS_ONLN)) <= 0);
+	printf("THe number of processors is %d\n\n", num_procs);
 
-   wc_data_t * data = (wc_data_t *)data_in; 
-   tid = (pthread_t *)MALLOC(num_procs * sizeof(pthread_t));  
+	wc_data_t * data = (wc_data_t *)data_in; 
+	tid = MALLOC(num_procs * sizeof(pthread_t));  
 
-   /* Thread must be scheduled systemwide */
-   pthread_attr_init(&attr);
-   pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
+	/* Thread must be scheduled systemwide */
+	pthread_attr_init(&attr);
+	pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
 
-   words = (wc_count_t**)malloc(num_procs*sizeof(wc_count_t*));
-   length = (int*)malloc(num_procs*sizeof(int));
-   use_len = (int*)malloc(num_procs*sizeof(int));
+	words = malloc(num_procs*sizeof(wc_count_t*));
+	length = malloc(num_procs*sizeof(int));
+	use_len = malloc(num_procs*sizeof(int));
 
-   int req_bytes = data->flen / num_procs;
+	int req_bytes = data->flen / num_procs;
+   
+	for ( i = 0; i < num_procs; i++) {
+		words[i] = malloc(START_ARRAY_SIZE*sizeof(wc_count_t));
+		length[i] = START_ARRAY_SIZE;
+		use_len[i] = 0;
 
-   for(i=0; i<num_procs; i++)
-   {
-      words[i] = (wc_count_t*)malloc(START_ARRAY_SIZE*sizeof(wc_count_t));
-      length[i] = START_ARRAY_SIZE;
-      use_len[i] = 0;
+		t_args_t* out = malloc(sizeof(t_args_t));
+		out->data = &data->fdata[data->fpos];
 
-      t_args_t* out = (t_args_t*)malloc(sizeof(t_args_t));
-	   out->data = &data->fdata[data->fpos];
-
-	   int available_bytes = data->flen - data->fpos;
-	   if(available_bytes < 0)
-		   available_bytes = 0;
+		int available_bytes = data->flen - data->fpos;
+		if(available_bytes < 0)
+			available_bytes = 0;
       
-      out->t_num = i;
-	   out->length = (req_bytes < available_bytes)? req_bytes:available_bytes;
+		out->t_num = i;
+		out->length = (req_bytes < available_bytes)? req_bytes:available_bytes;
 
-	   // Set the length to end at a space
-	   for (data->fpos += (long)out->length;
+		// Set the length to end at a space
+		for (data->fpos += (long)out->length;
 			data->fpos < data->flen && 
 			data->fdata[data->fpos] != ' ' && data->fdata[data->fpos] != '\t' &&
 			data->fdata[data->fpos] != '\r' && data->fdata[data->fpos] != '\n';
-			data->fpos++, out->length++);
+			data->fpos++, out->length++)
+			;
 	   
-			//printf("TID is %d file location is %ld and length is %d %ld\n",i,data->fpos, out->length, data->flen);
-			//fflush(stdout);
+		CHECK_ERROR(pthread_create(&tid[i], &attr, wordcount_map, (void*)out) != 0);
+		printf("LINE: %d, Create TID is %d %d\n", __LINE__, i, tid[i]);
+	}
+	printf("After pthread_create. Before Join\n");
 
-	   CHECK_ERROR(pthread_create(&tid[i], &attr, wordcount_map, (void*)out) != 0);
-   }
+	for (i = 0; i < num_procs; i++) {
+		int ret_val;
+		printf("LINE: %d, Join TID is %d %d\n", __LINE__, i, tid[i]);
+		CHECK_ERROR(pthread_join(tid[i], (void **)(void*)&ret_val) != 0);
+		CHECK_ERROR(ret_val != 0);
+	}
 
-   /* Barrier, wait for all threads to finish */
-   for (i = 0; i < num_procs; i++)
-   {
-      int ret_val;
-      CHECK_ERROR(pthread_join(tid[i], (void **)(void*)&ret_val) != 0);
-	  CHECK_ERROR(ret_val != 0);
-   }
+	printf("LINE: %d exit\n", __LINE__);
+	exit(-1);
 
 
-   // Join the arrays
-   int num_threads = num_procs / 2;
-   int rem_num = num_procs % 2;
+	// Join the arrays
+	int num_threads = num_procs / 2;
+	int rem_num = num_procs % 2;
    
-   wc_count_t** mwords = (wc_count_t**)malloc(num_procs*sizeof(wc_count_t*));
+	wc_count_t** mwords = malloc(num_procs*sizeof(wc_count_t*));
    
-   while(num_threads > 0)
-   {
-	   for(i=0; i<num_threads; i++)
-	   {
-		   merge_data_t* m_args = (merge_data_t*)malloc(sizeof(merge_data_t));
-		   m_args->length1 = use_len[i*2];
-         m_args->length2 = use_len[i*2 + 1];
-         m_args->length_out_pos = i;
-         m_args->data1 = words[i*2];
-         m_args->data2 = words[i*2 + 1];
-         int tlen = m_args->length1 + m_args->length2;
-         mwords[i] = (wc_count_t*)malloc(tlen*sizeof(wc_count_t));
-         m_args->out = mwords[i];
+	while(num_threads > 0) {
+		for(i=0; i<num_threads; i++) {
+			merge_data_t* m_args = (merge_data_t*)malloc(sizeof(merge_data_t));
+			m_args->length1 = use_len[i*2];
+			m_args->length2 = use_len[i*2 + 1];
+			m_args->length_out_pos = i;
+			m_args->data1 = words[i*2];
+			m_args->data2 = words[i*2 + 1];
+			int tlen = m_args->length1 + m_args->length2;
+			mwords[i] = (wc_count_t*)malloc(tlen*sizeof(wc_count_t));
+			m_args->out = mwords[i];
          
-		   CHECK_ERROR(pthread_create(&tid[i], &attr, merge_sections, (void*)m_args) != 0);
-	   }
+			CHECK_ERROR(pthread_create(&tid[i], &attr, merge_sections, (void*)m_args) != 0);
+			printf("LINE: %d, Create TID is %d %d\n", __LINE__, i, tid[i]);
+		}
 
-	   /* Barrier, wait for all threads to finish */
-	   for (i = 0; i < num_threads; i++)
-	   {
-		  int ret_val;
-		  CHECK_ERROR(pthread_join(tid[i], (void **)(void*)&ret_val) != 0);
-		  CHECK_ERROR(ret_val != 0);
+		for (i = 0; i < num_threads; i++) {
+			int ret_val;
+			printf("LINE: %d, Join TID is %d %d\n", __LINE__, i, tid[i]);
+			CHECK_ERROR(pthread_join(tid[i], (void **)(void*)&ret_val) != 0);
+			CHECK_ERROR(ret_val != 0);
 
-		  words[i] = mwords[i];
-		  use_len[i] = length[i];
-	   }
+			words[i] = mwords[i];
+			use_len[i] = length[i];
+		}
 	   
-      if (rem_num == 1)
-      {
-         words[num_threads] = words[num_threads*2];
-         use_len[num_threads] = use_len[num_threads*2];
-      }
-      
-      int old_num = num_threads;
-	   num_threads = (num_threads+rem_num) / 2;
-      rem_num = (old_num+rem_num) % 2;
-   }
-   free(length);
-   free(mwords);
-   free(tid);
+		if (rem_num == 1) {
+			words[num_threads] = words[num_threads*2];
+			use_len[num_threads] = use_len[num_threads*2];
+		}
+
+		int old_num = num_threads;
+		num_threads = (num_threads+rem_num) / 2;
+		rem_num = (old_num+rem_num) % 2;
+	}
+
+	free(length);
+	free(mwords);
+	free(tid);
 }
 
 /** wordcount_map()
@@ -229,54 +228,58 @@ void wordcount_splitter(void *data_in)
  */
 void *wordcount_map(void *args_in) 
 {
+#if 1
 	t_args_t* args = (t_args_t*)args_in;
 
-   char *curr_start, curr_ltr;
-   int state = NOT_IN_WORD;
-   int i;
-   assert(args);
+	char *curr_start, curr_ltr;
+	int state = NOT_IN_WORD;
+	int i;
 
-   char *data = (char *)(args->data);
-   curr_start = data;
-   assert(data);
+	assert(args);
 
-   for (i = 0; i < args->length; i++)
-   {
-      curr_ltr = toupper(data[i]);
-      switch (state)
-      {
-      case IN_WORD:
-         data[i] = curr_ltr;
-         if ((curr_ltr < 'A' || curr_ltr > 'Z') && curr_ltr != '\'')
-         {
-            data[i] = 0;
-			//printf("\nthe word is %s\n\n",curr_start);
-			wordcount_reduce(curr_start, args->t_num);
-            state = NOT_IN_WORD;
-         }
-      break;
+	char *data = (char *)(args->data);
+	curr_start = data;
+	assert(data);
 
-      default:
-      case NOT_IN_WORD:
-         if (curr_ltr >= 'A' && curr_ltr <= 'Z')
-         {
-            curr_start = &data[i];
-            data[i] = curr_ltr;
-            state = IN_WORD;
-         }
-         break;
-      }
-   }
+	printf("  Thread (pid %d) is running..\n", getpid());
 
-   // Add the last word
-   if (state == IN_WORD)
-   {
-			data[args->length] = 0;
-			//printf("\nthe word is %s\n\n",curr_start);
-			wordcount_reduce(curr_start, args->t_num);
-   }
-   free(args);
-   return (void *)0;
+	for (i = 0; i < args->length; i++) {
+		curr_ltr = toupper(data[i]);
+		switch (state) {
+		case IN_WORD:
+			data[i] = curr_ltr;
+			if ((curr_ltr < 'A' || curr_ltr > 'Z') && curr_ltr != '\'') {
+				data[i] = 0;
+				//printf("\nthe word is %s\n\n",curr_start);
+				wordcount_reduce(curr_start, args->t_num);
+				state = NOT_IN_WORD;
+			}
+			break;
+
+		default:
+		case NOT_IN_WORD:
+			if (curr_ltr >= 'A' && curr_ltr <= 'Z') {
+				curr_start = &data[i];
+				data[i] = curr_ltr;
+				state = IN_WORD;
+			}
+			break;
+		}
+	}
+
+	// Add the last word
+	if (state == IN_WORD) {
+		data[args->length] = 0;
+		//printf("\nthe word is %s\n\n",curr_start);
+		wordcount_reduce(curr_start, args->t_num);
+	}
+
+	free(args);
+	return (void *)0;
+#endif
+
+	printf("  Thread (pid %d) is running..\n", getpid());
+	return 0;
 }
 
 /** wordcount_reduce()
@@ -403,6 +406,8 @@ int main(int argc, char *argv[]) {
 
    struct timeval starttime,endtime;
 
+   setbuf(stdout, NULL);
+
    // Make sure a filename is specified
    if (argv[1] == NULL)
    {
@@ -434,13 +439,10 @@ int main(int argc, char *argv[]) {
    wc_data.flen = finfo.st_size;
    wc_data.fdata = fdata;
 
-   dprintf("Wordcount: Calling MapReduce Scheduler Wordcount\n");
+   printf("Wordcount: Calling MapReduce Scheduler Wordcount\n");
 
    gettimeofday(&starttime,0);
-
    wordcount_splitter(&wc_data);
-   
-
    gettimeofday(&endtime,0);
 
    printf("Word Count: Completed %ld\n",(endtime.tv_sec - starttime.tv_sec));
