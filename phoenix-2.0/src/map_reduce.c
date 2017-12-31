@@ -74,7 +74,7 @@
 /* Debug printf */
 #ifdef dprintf
 #undef dprintf
-#define dprintf(...) //printf(__VA_ARGS__)
+#define dprintf(...) printf(__VA_ARGS__)
 #endif
 
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
@@ -260,7 +260,7 @@ map_reduce (map_reduce_args_t * args)
        /* could not allocate environment */
        return -1;
     }
-    //env_print (env);
+    env_print (env);
     env->taskQueue = tq_init (env->num_map_threads);
     assert (env->taskQueue != NULL);
 
@@ -700,7 +700,7 @@ static bool map_worker_do_next_task (
     thread_func_arg.length = map_task.len;
     thread_func_arg.data = (void *)map_task.data;
 
-    dprintf("Task %d: cpu_id -> %d - Started\n", curr_task, th_arg->cpu_id);
+    //printf("Task %d: cpu_id -> %d - Started\n", curr_task, th_arg->cpu_id);
 
     /* Perform map task. */
     get_time (&begin);
@@ -711,7 +711,7 @@ static bool map_worker_do_next_task (
     args->run_time = time_diff (&end, &begin);
 #endif
 
-    dprintf("Task %d: cpu_id -> %d - Done\n", curr_task, th_arg->cpu_id);
+    //dprintf("Task %d: cpu_id -> %d - Done\n", curr_task, th_arg->cpu_id);
 
     return true;
 }
