@@ -122,7 +122,7 @@ void wordcount_splitter(void *data_in)
 	int i,num_procs;
 
 	CHECK_ERROR((num_procs = sysconf(_SC_NPROCESSORS_ONLN)) <= 0);
-	printf("THe number of processors is %d\n\n", num_procs);
+	printf("The number of processors is %d\n\n", num_procs);
 
 	wc_data_t * data = (wc_data_t *)data_in; 
 	tid = MALLOC(num_procs * sizeof(pthread_t));  
@@ -161,19 +161,19 @@ void wordcount_splitter(void *data_in)
 			;
 	   
 		CHECK_ERROR(pthread_create(&tid[i], &attr, wordcount_map, (void*)out) != 0);
-		printf("LINE: %d, Create TID is %d %d\n", __LINE__, i, tid[i]);
+		printf("LINE: %d, Create TID is %d\n", __LINE__, i);
 	}
 	printf("After pthread_create. Before Join\n");
 
 	for (i = 0; i < num_procs; i++) {
 		int ret_val;
-		printf("LINE: %d, Join TID is %d %d\n", __LINE__, i, tid[i]);
+		printf("LINE: %d, Join TID is %d\n", __LINE__, i);
 		CHECK_ERROR(pthread_join(tid[i], (void **)(void*)&ret_val) != 0);
 		CHECK_ERROR(ret_val != 0);
 	}
 
 	printf("LINE: %d exit\n", __LINE__);
-	exit(-1);
+	//exit(-1);
 
 
 	// Join the arrays
@@ -195,12 +195,12 @@ void wordcount_splitter(void *data_in)
 			m_args->out = mwords[i];
          
 			CHECK_ERROR(pthread_create(&tid[i], &attr, merge_sections, (void*)m_args) != 0);
-			printf("LINE: %d, Create TID is %d %d\n", __LINE__, i, tid[i]);
+			printf("LINE: %d, Create TID is %d\n", __LINE__, i);
 		}
 
 		for (i = 0; i < num_threads; i++) {
 			int ret_val;
-			printf("LINE: %d, Join TID is %d %d\n", __LINE__, i, tid[i]);
+			printf("LINE: %d, Join TID is %d\n", __LINE__, i);
 			CHECK_ERROR(pthread_join(tid[i], (void **)(void*)&ret_val) != 0);
 			CHECK_ERROR(ret_val != 0);
 
@@ -241,7 +241,7 @@ void *wordcount_map(void *args_in)
 	curr_start = data;
 	assert(data);
 
-	printf("  Thread (pid %d) is running..\n", getpid());
+	printf("    %d Thread (pid %d) is running..\n", __LINE__, getpid());
 
 	for (i = 0; i < args->length; i++) {
 		curr_ltr = toupper(data[i]);
@@ -278,7 +278,7 @@ void *wordcount_map(void *args_in)
 	return (void *)0;
 #endif
 
-	printf("  Thread (pid %d) is running..\n", getpid());
+	printf("    %d Thread (pid %d) is running..\n", __LINE__, getpid());
 	return 0;
 }
 
@@ -395,8 +395,8 @@ void *merge_sections(void *args_in)
    return (void*)0;
 }
 
-int main(int argc, char *argv[]) {
-   
+int main(int argc, char *argv[])
+{
    int i;
    int fd;
    char * fdata;
@@ -439,28 +439,25 @@ int main(int argc, char *argv[]) {
    wc_data.flen = finfo.st_size;
    wc_data.fdata = fdata;
 
-   printf("Wordcount: Calling MapReduce Scheduler Wordcount\n");
+   printf("Word Count: Calling MapReduce Scheduler Wordcount\n");
 
    gettimeofday(&starttime,0);
    wordcount_splitter(&wc_data);
    gettimeofday(&endtime,0);
 
-   printf("Word Count: Completed %ld\n",(endtime.tv_sec - starttime.tv_sec));
+   printf("Word Count: Computation Completed %ld sec\n",(endtime.tv_sec - starttime.tv_sec));
 
    gettimeofday(&starttime,0);
-
    sort_pthreads(words[0], use_len[0], sizeof(wc_count_t), wordcount_cmp);
-
    gettimeofday(&endtime,0);
 
-	dprintf("Word Count: Sorting Completed %ld\n",(endtime.tv_sec - starttime.tv_sec));
+   printf("Word Count: Sorting Completed %ld sec\n",(endtime.tv_sec - starttime.tv_sec));
 
-   for(i=0; i< DEFAULT_DISP_NUM && i < use_len[0] ; i++)
-   {
+   for(i=0; i< DEFAULT_DISP_NUM && i < use_len[0] ; i++) {
 		wc_count_t* temp = &(words[0][i]);
 		printf("The word is %s and count is %d\n", temp->word, temp->count);
-		//fflush(stdout);
    }
+
    free(use_len);
    free(words[0]);
    free(words);
