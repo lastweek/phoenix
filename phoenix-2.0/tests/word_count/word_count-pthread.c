@@ -37,12 +37,18 @@
 #include <fcntl.h>
 #include <ctype.h>
 #include <pthread.h>
+#include <sys/syscall.h>
 
 #include "stddefines.h"
 #include "sort-pthread.h"
 
 #define DEFAULT_DISP_NUM 10
 #define START_ARRAY_SIZE 2000
+
+static inline pid_t gettid(void)
+{
+        return syscall(SYS_gettid);
+}
 
 typedef struct {
 	char* word;
@@ -161,20 +167,19 @@ void wordcount_splitter(void *data_in)
 			;
 	   
 		CHECK_ERROR(pthread_create(&tid[i], &attr, wordcount_map, (void*)out) != 0);
-		printf("LINE: %d, Create TID is %d\n", __LINE__, i);
+		printf("LINE: %d, Create mapreduce thread %d\n", __LINE__, i);
 	}
 	printf("After pthread_create. Before Join\n");
 
 	for (i = 0; i < num_procs; i++) {
 		int ret_val;
-		printf("LINE: %d, Join TID is %d\n", __LINE__, i);
+		printf("LINE: %d, Join mapreduce thread %d\n", __LINE__, i);
 		CHECK_ERROR(pthread_join(tid[i], (void **)(void*)&ret_val) != 0);
 		CHECK_ERROR(ret_val != 0);
 	}
 
-	printf("LINE: %d exit\n", __LINE__);
+	printf("LINE: %d After join all mapreduce threads\n", __LINE__);
 	//exit(-1);
-
 
 	// Join the arrays
 	int num_threads = num_procs / 2;
@@ -195,12 +200,12 @@ void wordcount_splitter(void *data_in)
 			m_args->out = mwords[i];
          
 			CHECK_ERROR(pthread_create(&tid[i], &attr, merge_sections, (void*)m_args) != 0);
-			printf("LINE: %d, Create TID is %d\n", __LINE__, i);
+			printf("LINE: %d, Create merge_section thread %d\n", __LINE__, i);
 		}
 
 		for (i = 0; i < num_threads; i++) {
 			int ret_val;
-			printf("LINE: %d, Join TID is %d\n", __LINE__, i);
+			printf("LINE: %d, Join merge_section thread is %d\n", __LINE__, i);
 			CHECK_ERROR(pthread_join(tid[i], (void **)(void*)&ret_val) != 0);
 			CHECK_ERROR(ret_val != 0);
 
@@ -228,7 +233,7 @@ void wordcount_splitter(void *data_in)
  */
 void *wordcount_map(void *args_in) 
 {
-#if 1
+#if 0
 	t_args_t* args = (t_args_t*)args_in;
 
 	char *curr_start, curr_ltr;
@@ -242,6 +247,7 @@ void *wordcount_map(void *args_in)
 	assert(data);
 
 	printf("    %d Thread (pid %d) is running..\n", __LINE__, getpid());
+	return (void *)0;
 
 	for (i = 0; i < args->length; i++) {
 		curr_ltr = toupper(data[i]);
@@ -278,8 +284,8 @@ void *wordcount_map(void *args_in)
 	return (void *)0;
 #endif
 
-	printf("    %d Thread (pid %d) is running..\n", __LINE__, getpid());
-	return 0;
+	printf("  LINE:%d mapreduce thread (tid %d) is running..\n", __LINE__, gettid());
+	return (void *)0;
 }
 
 /** wordcount_reduce()
@@ -350,6 +356,7 @@ void wordcount_reduce(char* word, int t_num)
  */
 void *merge_sections(void *args_in)  
 {
+#if 0
    merge_data_t* args = (merge_data_t*)args_in;
    int cmp_ret;
    int curr1, curr2;
@@ -391,7 +398,11 @@ void *merge_sections(void *args_in)
    free(args->data1);
    free(args->data2);
    free(args);
-   
+
+#else
+	printf("  LINE:%d merge_section thread (tid %d) is running..\n", __LINE__, gettid());
+#endif
+
    return (void*)0;
 }
 
