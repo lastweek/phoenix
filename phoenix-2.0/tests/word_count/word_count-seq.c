@@ -66,6 +66,35 @@ int length;
 void wordcount_getword(void *args_in);
 void wordcount_addword(char* word, int len) ;
 
+/*
+ * result: diff
+ * x: end time
+ * y: start time
+ */
+static inline int timeval_sub(struct timeval *result, struct timeval *x,
+			  struct timeval *y)
+{
+  /* Perform the carry for the later subtraction by updating y. */
+  if (x->tv_usec < y->tv_usec) {
+    int nsec = (y->tv_usec - x->tv_usec) / 1000000 + 1;
+    y->tv_usec -= 1000000 * nsec;
+    y->tv_sec += nsec;
+  }
+  if (x->tv_usec - y->tv_usec > 1000000) {
+    int nsec = (x->tv_usec - y->tv_usec) / 1000000;
+    y->tv_usec += 1000000 * nsec;
+    y->tv_sec -= nsec;
+  }
+
+  /* Compute the time remaining to wait.
+     tv_usec is certainly positive. */
+  result->tv_sec = x->tv_sec - y->tv_sec;
+  result->tv_usec = x->tv_usec - y->tv_usec;
+
+  /* Return 1 if result is negative. */
+  return x->tv_sec < y->tv_sec;
+}
+
 /** wordcount_cmp()
  *  Comparison function to compare 2 words
  */
@@ -233,6 +262,9 @@ int main(int argc, char *argv[]) {
    int disp_num;
    struct stat finfo;
    char * fname, * disp_num_str;
+   struct timeval starttime,endtime,difftime;
+
+   setbuf(stdout, NULL);
 
    // Make sure a filename is specified
    if (argv[1] == NULL)
@@ -244,8 +276,6 @@ int main(int argc, char *argv[]) {
    fname = argv[1];
    disp_num_str = argv[2];
 
-   printf("Wordcount: Running...\n");
-   
    // Read in the file
    CHECK_ERROR((fd = open(fname, O_RDONLY)) < 0);
    // Get the file info (for file length)
@@ -263,19 +293,21 @@ int main(int argc, char *argv[]) {
    wc_data.flen = finfo.st_size;
    wc_data.fdata = fdata;
 
-   printf("Wordcount Serial: Running\n");
-   
+   gettimeofday(&starttime,0);
    wordcount_splitter(&wc_data);
-   
-   qsort(words, use_len, sizeof(wc_count_t), wordcount_cmp);
-   
+   gettimeofday(&endtime,0);
 
-	dprintf("Use len is %d\n", use_len);
-   
+   timeval_sub(&difftime, &endtime, &starttime);
+   printf("Word-Count-Seq: Computation Completed %ld.%ld sec\n",
+   	difftime.tv_sec, difftime.tv_usec);
+
+   qsort(words, use_len, sizeof(wc_count_t), wordcount_cmp);
+
+   printf("Use len is %d\n", use_len);
    for(i=0; i< disp_num && i < use_len ; i++)
    {
 		wc_count_t* temp = &(words[i]);
-      dprintf("%s: %d\n", temp->word, temp->count);
+   	printf("%s: %d\n", temp->word, temp->count);
    }
    free(words);
 

@@ -45,6 +45,35 @@
 #define DEFAULT_DISP_NUM 10
 #define START_ARRAY_SIZE 2000
 
+/*
+ * result: diff
+ * x: end time
+ * y: start time
+ */
+static inline int timeval_sub(struct timeval *result, struct timeval *x,
+			  struct timeval *y)
+{
+  /* Perform the carry for the later subtraction by updating y. */
+  if (x->tv_usec < y->tv_usec) {
+    int nsec = (y->tv_usec - x->tv_usec) / 1000000 + 1;
+    y->tv_usec -= 1000000 * nsec;
+    y->tv_sec += nsec;
+  }
+  if (x->tv_usec - y->tv_usec > 1000000) {
+    int nsec = (x->tv_usec - y->tv_usec) / 1000000;
+    y->tv_usec += 1000000 * nsec;
+    y->tv_sec -= nsec;
+  }
+
+  /* Compute the time remaining to wait.
+     tv_usec is certainly positive. */
+  result->tv_sec = x->tv_sec - y->tv_sec;
+  result->tv_usec = x->tv_usec - y->tv_usec;
+
+  /* Return 1 if result is negative. */
+  return x->tv_sec < y->tv_sec;
+}
+
 static inline pid_t gettid(void)
 {
         return syscall(SYS_gettid);
@@ -128,7 +157,7 @@ void wordcount_splitter(void *data_in)
 	int i,num_procs;
 
 	CHECK_ERROR((num_procs = sysconf(_SC_NPROCESSORS_ONLN)) <= 0);
-	printf("The number of processors is %d\n\n", num_procs);
+	//printf("The number of processors is %d\n\n", num_procs);
 
 	wc_data_t * data = (wc_data_t *)data_in; 
 	tid = MALLOC(num_procs * sizeof(pthread_t));  
@@ -167,19 +196,18 @@ void wordcount_splitter(void *data_in)
 			;
 	   
 		CHECK_ERROR(pthread_create(&tid[i], &attr, wordcount_map, (void*)out) != 0);
-		printf("LINE: %d, Create mapreduce thread %d\n", __LINE__, i);
+		//printf("LINE: %d, Create mapreduce thread %d\n", __LINE__, i);
 	}
-	printf("After pthread_create. Before Join\n");
+	//printf("After pthread_create. Before Join\n");
 
 	for (i = 0; i < num_procs; i++) {
 		int ret_val;
-		printf("LINE: %d, Join mapreduce thread %d\n", __LINE__, i);
+		//printf("LINE: %d, Join mapreduce thread %d\n", __LINE__, i);
 		CHECK_ERROR(pthread_join(tid[i], (void **)(void*)&ret_val) != 0);
 		CHECK_ERROR(ret_val != 0);
 	}
 
-	printf("LINE: %d After join all mapreduce threads\n", __LINE__);
-	//exit(-1);
+	//printf("LINE: %d After join all mapreduce threads\n", __LINE__);
 
 	// Join the arrays
 	int num_threads = num_procs / 2;
@@ -200,12 +228,12 @@ void wordcount_splitter(void *data_in)
 			m_args->out = mwords[i];
          
 			CHECK_ERROR(pthread_create(&tid[i], &attr, merge_sections, (void*)m_args) != 0);
-			printf("LINE: %d, Create merge_section thread %d\n", __LINE__, i);
+			//printf("LINE: %d, Create merge_section thread %d\n", __LINE__, i);
 		}
 
 		for (i = 0; i < num_threads; i++) {
 			int ret_val;
-			printf("LINE: %d, Join merge_section thread is %d\n", __LINE__, i);
+			//printf("LINE: %d, Join merge_section thread is %d\n", __LINE__, i);
 			CHECK_ERROR(pthread_join(tid[i], (void **)(void*)&ret_val) != 0);
 			CHECK_ERROR(ret_val != 0);
 
@@ -233,7 +261,7 @@ void wordcount_splitter(void *data_in)
  */
 void *wordcount_map(void *args_in) 
 {
-#if 0
+#if 1
 	t_args_t* args = (t_args_t*)args_in;
 
 	char *curr_start, curr_ltr;
@@ -246,8 +274,7 @@ void *wordcount_map(void *args_in)
 	curr_start = data;
 	assert(data);
 
-	printf("    %d Thread (pid %d) is running..\n", __LINE__, getpid());
-	return (void *)0;
+	//printf("  LINE:%d mapreduce thread (tid %d) is running..\n", __LINE__, gettid());
 
 	for (i = 0; i < args->length; i++) {
 		curr_ltr = toupper(data[i]);
@@ -284,7 +311,7 @@ void *wordcount_map(void *args_in)
 	return (void *)0;
 #endif
 
-	printf("  LINE:%d mapreduce thread (tid %d) is running..\n", __LINE__, gettid());
+	//printf("  LINE:%d mapreduce thread (tid %d) is running..\n", __LINE__, gettid());
 	return (void *)0;
 }
 
@@ -356,12 +383,14 @@ void wordcount_reduce(char* word, int t_num)
  */
 void *merge_sections(void *args_in)  
 {
-#if 0
+#if 1
    merge_data_t* args = (merge_data_t*)args_in;
    int cmp_ret;
    int curr1, curr2;
    int length_out = 0;
    
+   //printf("  LINE:%d merge_section thread (tid %d) is running..\n", __LINE__, gettid());
+
    for (curr1 = 0, curr2 = 0; 
         curr1 < args->length1 && curr2 < args->length2;) 
    {
@@ -415,7 +444,7 @@ int main(int argc, char *argv[])
    struct stat finfo;
    char * fname, * disp_num_str;
 
-   struct timeval starttime,endtime;
+   struct timeval starttime,endtime,difftime;
 
    setbuf(stdout, NULL);
 
@@ -450,20 +479,22 @@ int main(int argc, char *argv[])
    wc_data.flen = finfo.st_size;
    wc_data.fdata = fdata;
 
-   printf("Word Count: Calling MapReduce Scheduler Wordcount\n");
-
    gettimeofday(&starttime,0);
    wordcount_splitter(&wc_data);
    gettimeofday(&endtime,0);
 
-   printf("Word Count: Computation Completed %ld sec\n",(endtime.tv_sec - starttime.tv_sec));
+   timeval_sub(&difftime, &endtime, &starttime);
+   printf("Word Count: Computation Completed %ld.%ld sec\n",
+   	difftime.tv_sec, difftime.tv_usec);
 
    gettimeofday(&starttime,0);
    sort_pthreads(words[0], use_len[0], sizeof(wc_count_t), wordcount_cmp);
    gettimeofday(&endtime,0);
 
-   printf("Word Count: Sorting Completed %ld sec\n",(endtime.tv_sec - starttime.tv_sec));
+   timeval_sub(&difftime, &endtime, &starttime);
+   printf("Word Count: Sorting Completed %ld.%ld sec\n", difftime.tv_sec, difftime.tv_usec);
 
+   printf("Total number of words use_len[0]: %d\n", use_len[0]);
    for(i=0; i< DEFAULT_DISP_NUM && i < use_len[0] ; i++) {
 		wc_count_t* temp = &(words[0][i]);
 		printf("The word is %s and count is %d\n", temp->word, temp->count);
