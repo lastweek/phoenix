@@ -373,7 +373,14 @@ void wordcount_reduce(char* word, int t_num)
 	if(use_len[t_num] == length[t_num])
 	{
 		length[t_num] *= 2;
+#if 0
 	   words[t_num] = (wc_count_t*)realloc(words[t_num],length[t_num]*sizeof(wc_count_t));
+#else
+	void *buf;
+	buf = malloc(length[t_num]*sizeof(wc_count_t));
+	memcpy(buf, words[t_num], length[t_num]*sizeof(wc_count_t)/2);
+	words[t_num] = buf;
+#endif
 	}
 }
 
