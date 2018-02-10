@@ -24,6 +24,7 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */ 
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <strings.h>
 #include <string.h>
@@ -38,6 +39,7 @@
 #include <ctype.h>
 #include <pthread.h>
 #include <sys/syscall.h>
+#include <sched.h>
 
 #include "stddefines.h"
 #include "sort-pthread.h"
@@ -442,6 +444,15 @@ void *merge_sections(void *args_in)
    return (void*)0;
 }
 
+static int __proc_bind_thread (int cpu_id)
+{
+    cpu_set_t   cpu_set;
+
+    CPU_ZERO (&cpu_set);
+    CPU_SET (cpu_id, &cpu_set);
+
+    return sched_setaffinity (0, sizeof (cpu_set), &cpu_set);
+}
 int main(int argc, char *argv[])
 {
    int i;
@@ -454,6 +465,8 @@ int main(int argc, char *argv[])
    struct timeval starttime,endtime,difftime;
 
    setbuf(stdout, NULL);
+
+__proc_bind_thread(8);
 
    // Make sure a filename is specified
    if (argv[1] == NULL)
